@@ -1,0 +1,31 @@
+# 编译生成的对象文件
+*.obj
+*.o
+
+# 可执行文件
+*.exe
+*.out
+
+# 静态库和动态库
+*.lib
+*.a
+*.dll
+*.so
+
+# 编译生成的目录
+build/
+Debug/
+Release/
+x64/
+bin/
+obj/
+# IDE相关文件
+.vs/
+*.vcxproj.user
+*.sln
+*.vcxproj
+*.vcxproj.filters
+# 其他
+*.log
+*.pdb
+*.idb
