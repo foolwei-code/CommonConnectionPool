@@ -1,41 +1,40 @@
-#include"public.h"
+ï»¿#include"public.h"
 #include"Connection.h"
 #include<string>
-//³õÊ¼»¯Êı¾İ¿âÁ¬½Ó
+//åˆå§‹åŒ–æ•°æ®åº“è¿æ¥
 Connection::Connection()
 {
 	_conn = mysql_init(nullptr);
 }
-//ÊÍ·ÅÊı¾İ¿âÁ¬½Ó×ÊÔ´
+//é‡Šæ”¾æ•°æ®åº“è¿æ¥èµ„æº
 Connection::~Connection()
 {
 	if (_conn != nullptr)
 		mysql_close(_conn);
 }
-//Á¬½ÓÊı¾İ¿â
+//è¿æ¥æ•°æ®åº“
 bool Connection::connect(std::string ip, unsigned short port, std::string user,std::string password, std::string dbname)
 {
 	MYSQL* p = mysql_real_connect(_conn, ip.c_str(), user.c_str(), password.c_str(), dbname.c_str(), port, nullptr, 0);
 	return _conn != nullptr;
 }
-//¸üĞÂ²Ù×÷ insert£¬delete£¬update
+//æ›´æ–°æ“ä½œ insertï¼Œdeleteï¼Œupdate
 bool Connection::update(std::string sql)
 {
 	if (mysql_query(_conn, sql.c_str()))
 	{
-		LOG("¸üĞÂÊ§°Ü:" + sql);
+		LOG("æ›´æ–°å¤±è´¥:" + sql);
 		return false;
 	}
 	return true;
 }
-//²éÑ¯²Ù×÷select
+//æŸ¥è¯¢æ“ä½œselect
 MYSQL_RES* Connection::query(std::string sql)
 {
 	if (mysql_query(_conn, sql.c_str()))
 	{
-		LOG("²éÑ¯Ê§°Ü" + sql);
+		LOG("æŸ¥è¯¢å¤±è´¥" + sql);
 		return nullptr;
 	}
 	return mysql_use_result(_conn);
-	std::string s;
 }

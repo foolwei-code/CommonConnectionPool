@@ -1,5 +1,5 @@
-#pragma once
+ï»¿#pragma once
 #include <iostream> 
-// ÈÕÖ¾ºê¶¨Òå
+// æ—¥å¿—å®å®šä¹‰
 #define LOG(str) \
-std::cout << __FILE__ << ":" << __LINE__ << " "<< __TIMESTAMP__ << ": " << str << std::endl;
+std::cout << __FILE__ << ":" << __LINE__ << " "<< __TIMESTAMP__ << ": "<< str << std::endl;

@@ -1,20 +1,26 @@
-#pragma once
+ï»¿#pragma once
 #include<mysql.h>
 #include<string>
-//ÊµÏÖmysqlÊı¾İ¿âµÄ²Ù×÷
+#include<ctime>
+//å®ç°mysqlæ•°æ®åº“çš„æ“ä½œ
 class Connection
 {
 public:
-	//³õÊ¼»¯Êı¾İ¿â
+	//åˆå§‹åŒ–æ•°æ®åº“
 	Connection();
-	//ÊÍ·ÅÊı¾İ¿âÁ¬½Ó×ÊÔ´
+	//é‡Šæ”¾æ•°æ®åº“è¿æ¥èµ„æº
 	~Connection();
-	//Á¬½ÓÊı¾İ¿â
+	//è¿æ¥æ•°æ®åº“
 	bool connect(std::string ip, unsigned short port, std::string user, std::string password, std::string dbname);
-	//¸üĞÂ²Ù×÷
+	//æ›´æ–°æ“ä½œ
 	bool update(std::string sql);
-	//²éÑ¯²Ù×÷
+	//æŸ¥è¯¢æ“ä½œ
 	MYSQL_RES* query(std::string sql);
+	//åˆ·æ–°ä¸€ä¸‹è¿æ¥çš„èµ·å§‹çš„ç©ºé—²æ—¶é—´ç‚¹
+	void refreshAliveTime() { aliveTime_ = clock(); }
+	//è¿”å›å­˜æ´»çš„æ—¶é—´
+	std::clock_t getAliveTime()const { return clock() - aliveTime_; }
 private:
-	MYSQL* _conn;//±íÊ¾ºÍMySQL½¨Á¢Ò»ÌõÁ¬½Ó
+	MYSQL* _conn;//è¡¨ç¤ºå’ŒMySQLå»ºç«‹ä¸€æ¡è¿æ¥
+	std::clock_t aliveTime_;  //è®°å½•è¿›å…¥ç©ºé—²çŠ¶æ€åçš„èµ·å§‹å­˜æ´»æ—¶é—´
 };

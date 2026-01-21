@@ -1,25 +1,39 @@
-#pragma once
+ï»¿#pragma once
 #include<string>
 #include<queue>
 #include"Connection.h"
 #include<mutex>
-//ÊµÏÖÊı¾İ¿âÁ¬½Ó³Ø
+#include<atomic>
+#include<thread>
+#include<memory>
+#include<functional>
+#include<condition_variable>
+//å®ç°æ•°æ®åº“è¿æ¥æ± 
 class ConnectionPool
 {
 public:
-	//»ñÈ¡Á¬½Ó³Ø¶ÔÏóµÄÊµÀı
+	//è·å–è¿æ¥æ± å¯¹è±¡çš„å®ä¾‹
 	static ConnectionPool* getConnectionPool();
+	//ç»™å¤–éƒ¨æä¾›æ¥å£ï¼Œä»è¿æ¥æ± ä¸­è·å¾—ä¸€ä¸ªç©ºé—²è¿æ¥
+	  std::shared_ptr<Connection>getConnection();
 private:
-	ConnectionPool();//µ¥Àı1£º¹¹Ôìº¯ÊıµÄË½ÓĞ»¯
-	bool  loadConfigFile();//´ÓÅäÖÃÎÄ¼şÖĞ¼ÓÔØÅäÖÃÏî
-	std::string ip_; //mysqlµÄipµØÖ·
-	unsigned short port_; //mysqlµÄ¶Ë¿ÚºÅ3306
-	std::string username_;//mysqlµÄµÇÂ¼ÓÃ»§Ãû
-	std::string password_;//mysqlµÄµÇÂ½ÃÜÂë
-	int initSize_;  //Á¬½Ó³ØµÄ³õÊ¼Á¬½ÓÁ¿
-	int maxSize_;   //Á¬½Ó³ØµÄ×î´óÁ¬½ÓÁ¿
-	int maxFreeTime_; //Á¬½Ó³ØµÄ×î´ó¿ÕÏĞÊ±¼ä
-	int connectionTimeOut_;//Á¬½ÓµÄ³¬Ê±Ê±³¤
-	std::queue<Connection*>connection_queue_;//´æ´¢mysqlµÄÁ¬½ÓµÄ¶ÓÁĞ
-	std::mutex queue_mutex_;  //Î¬»¤Á¬½Ó¶ÓÁĞµÄÏß³Ì°²È«µÄ»¥³âËø
+	ConnectionPool();//å•ä¾‹1ï¼šæ„é€ å‡½æ•°çš„ç§æœ‰åŒ–
+	//è¿è¡Œåœ¨ç‹¬ç«‹çš„çº¿ç¨‹ä¸­ï¼Œè´Ÿè´£ç”Ÿäº§æ–°è¿æ¥
+	void produceConnectionTask();
+	//æ‰«æå¤šä½™çš„ç©ºé—²è¿æ¥ï¼Œè¿›è¡Œå¯¹å¤šä½™çš„è¿æ¥è¿›è¡Œå›æ”¶
+	void scannerConnectionTask();
+	bool  loadConfigFile();//ä»é…ç½®æ–‡ä»¶ä¸­åŠ è½½é…ç½®é¡¹
+	std::string ip_; //mysqlçš„ipåœ°å€
+	unsigned short port_; //mysqlçš„ç«¯å£å·3306
+	std::string username_;//mysqlçš„ç™»å½•ç”¨æˆ·å
+	std::string password_;//mysqlçš„ç™»é™†å¯†ç 
+	std::string dbname_;  //è¿æ¥çš„æ•°æ®åº“çš„åç§°
+	int initSize_;  //è¿æ¥æ± çš„åˆå§‹è¿æ¥é‡
+	int maxSize_;   //è¿æ¥æ± çš„æœ€å¤§è¿æ¥é‡
+	int maxFreeTime_; //è¿æ¥æ± çš„æœ€å¤§ç©ºé—²æ—¶é—´
+	int connectionTimeOut_;//è¿æ¥çš„è¶…æ—¶æ—¶é•¿
+	std::queue<Connection*>connection_queue_;//å­˜å‚¨mysqlçš„è¿æ¥çš„é˜Ÿåˆ—
+	std::mutex queue_mutex_;  //ç»´æŠ¤è¿æ¥é˜Ÿåˆ—çš„çº¿ç¨‹å®‰å…¨çš„äº’æ–¥é”
+	std::atomic_int connection_Count_;  //è®°å½•è¿æ¥æ‰€åˆ›å»ºçš„connectionè¿æ¥çš„æ€»æ•°é‡
+	std::condition_variable cv; //è®¾ç½®æ¡ä»¶å˜é‡ï¼Œç”¨äºè¿æ¥ç”Ÿäº§çº¿ç¨‹å’Œæ¶ˆè´¹çº¿ç¨‹çš„é€šä¿¡
 };
