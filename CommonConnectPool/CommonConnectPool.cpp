@@ -1,39 +1,41 @@
 ﻿#include"CommonConnectionPool.h"
 #include"public.h"
-#include<string>
-//线程安全的懒汉单例模式
-ConnectionPool* ConnectionPool::getConnectionPool()
+#include<functional>
+CommonConnectionPool::CommonConnectionPool()
 {
-	static ConnectionPool pool;//lock和unlock
-	return &pool;
-}
-//连接池的构造
-ConnectionPool::ConnectionPool(){
-	if (!loadConfigFile())
+	if (!loadConfigureFile())
+	{
+		LOG("falied to create CommonConnectionPool");
 		return;
-	//创建初始数量的连接
+	}
 	for (int i = 0; i < initSize_; i++)
 	{
 		Connection* p = new Connection();
-		p->connect(ip_, port_, username_, password_, dbname_);
-		p->refreshAliveTime(); //刷新一下开始空闲的起始时间
-		connection_queue_.push(p);
-		connection_Count_++;
+		p->connection(ip_, port_, username_, password_, dbname_);
+		connectionCount_++;
+		connectionQueue_.emplace(p);
 	}
-	//启动一个新的线程作为新的生产者
-	std::thread producer{ std::bind(&ConnectionPool::produceConnectionTask,this)};
+	//启动一个新的线程作为生产者线程生产连接
+	std::thread producer{ std::bind(&CommonConnectionPool::produceConnection,this) };
 	producer.detach();
 	//启动一个新的定时线程，扫描多余的空闲连接，进行对多余的连接进行回收
-	std::thread scanner{ std::bind(&ConnectionPool::scannerConnectionTask,this) };
+	std::thread scanner{ std::bind(&CommonConnectionPool::scannerConnectionTask,this) };
 	scanner.detach();
+
 }
-//从配置文件中加载配置项
-bool ConnectionPool::loadConfigFile()
+//获取连接池对象
+CommonConnectionPool*CommonConnectionPool::getCommonConnectionPool()
+{
+	static CommonConnectionPool instance;
+	return &instance;
+}
+//加载配置文件中的数据项
+bool CommonConnectionPool::loadConfigureFile()
 {
 	FILE* pf = fopen("mysql.ini", "r");
 	if (pf == nullptr)
 	{
-		LOG("mysql.ini file is not exist!");
+		LOG("mysql.ini is not exist");
 		return false;
 	}
 	while (!feof(pf))
@@ -41,20 +43,20 @@ bool ConnectionPool::loadConfigFile()
 		char line[1024] = { 0 };
 		fgets(line, 1024, pf);
 		std::string str = line;
-		int idx = str.find('=', 0);
-		if (idx == -1)  //无效的配置项
-		{
+		std::size_t index = str.find('=', 0);
+		if (index == std::string::npos)
 			continue;
-		}
-		int endidx = str.find('\n', idx);
-		std::string key = str.substr(0, idx);
-		std::string value = str.substr(idx + 1, endidx - idx - 1);
+		std::size_t endindex = str.find('\n', index);
+		std::string key = str.substr(0, index);
+		std::string value = str.substr(index + 1, endindex - index - 1);
 		if (key == "ip")
 			ip_ = value;
 		else if (key == "port")
 			port_ = atoi(value.c_str());
 		else if (key == "username")
 			username_ = value;
+		else if (key == "dbname")
+			dbname_ = value;
 		else if (key == "password")
 			password_ = value;
 		else if (key == "initSize")
@@ -63,90 +65,76 @@ bool ConnectionPool::loadConfigFile()
 			maxSize_ = atoi(value.c_str());
 		else if (key == "maxFreeTime")
 			maxFreeTime_ = atoi(value.c_str());
-		else if (key == "connectionTimeOut")
-			connectionTimeOut_ = atoi(value.c_str());
-		else if (key == "dbname")
-			dbname_ = value;
-	}
+		else if (key == "maxTimeOut")
+			maxTimeOut_ = atoi(value.c_str());
+     }
+	fclose(pf);
 	return true;
 }
-//运行在独立的线程中，专门负责生产新的连接
-void ConnectionPool::produceConnectionTask()
+void CommonConnectionPool::produceConnection()
 {
 	while (true)
 	{
-		std::unique_lock<std::mutex>lock{ queue_mutex_ };
-		while (!connection_queue_.empty())
-		{
-			cv.wait(lock);  //队列不空，此处生产者线程进入等待状态
-		}
-		//连接数量没有到达上限，继续创建新的连接
-		if (connection_Count_ < maxSize_)
-		{
-			Connection* p = new Connection();
-			p->connect(ip_, port_, username_, password_, dbname_);
-			p->refreshAliveTime(); //刷新一下开始空闲的起始时间
-			connection_queue_.push(p);
-			connection_Count_++;
-		}
-		//通知消费者线程，可以进行消费了
-		cv.notify_all();
+		std::unique_lock<std::mutex>lock{ queueMutex_ };
+		while (!connectionQueue_.empty())
+			cv_.wait(lock);
+		if (connectionCount_ == maxSize_)
+			return;
+		//生产新的连接
+		Connection* p = new Connection();
+		p->connection(ip_, port_, username_, password_, dbname_);
+		connectionCount_++;
+		cv_.notify_all();
 	}
-}
 
-//给外部提供接口，从连接池中获得一个空闲连接
-std::shared_ptr<Connection> ConnectionPool::getConnection()
+}
+std::shared_ptr<Connection>CommonConnectionPool::getConnection()
 {
-	std::unique_lock<std::mutex>lock{ queue_mutex_ };
-	while(connection_queue_.empty())
+	std::unique_lock<std::mutex>lock{ queueMutex_ };
+	while (connectionQueue_.empty())
 	{
-		//不要写sleep
-		if (std::cv_status::timeout == cv.wait_for(lock, std::chrono::milliseconds(connectionTimeOut_)))
+		//等待超时时长的的时间，若还是没有获得连接，那么直接返回失败
+		if (std::cv_status::timeout == cv_.wait_for(lock, std::chrono::microseconds{ maxTimeOut_ }))
 		{
-			if (connection_queue_.empty())
+			if (connectionQueue_.empty())
 			{
-				LOG("获取空闲时间超时了...获取连接失败");
+				LOG("can not get connection");
 				return nullptr;
 			}
 		}
+
 	}
-	/*
-	 shared_ptr智能指针析构时，会把connection资源直接delete掉，
-	 相当于调用connection的析构函数，connection就被close掉了，
-	 这里需要自定义shared_ptr的释放资源方式，把connection直接归还到queue中
-	*/
-	std::shared_ptr<Connection>sp{ connection_queue_.front(),[&](Connection* pcon)->void
-		{
-			//这里是在服务器应用，所以一定要考虑到队列的线程安全操作
-			std::unique_lock<std::mutex>lock{queue_mutex_};
-			pcon->refreshAliveTime(); //刷新一下开始空闲的起始时间
-			connection_queue_.push(pcon);
-        }
+	//消费连接 
+	std::shared_ptr<Connection>foods{ connectionQueue_.front(),[&](Connection* pcon) {
+		std::unique_lock<std::mutex>lock{queueMutex_};
+		connectionQueue_.push(pcon);
+     }
 	};
-	connection_queue_.pop();
-	cv.notify_all(); //消费了队列中的最后一个connection,通知一下生产者生产连接
-	return sp;
+	connectionQueue_.pop();
+	connectionCount_--;
+	cv_.notify_all();
+	return foods;
 }
-//扫描多余的空闲连接，进行对多余的连接进行回收
-void ConnectionPool::scannerConnectionTask()
+void CommonConnectionPool::scannerConnectionTask()
 {
 	while (true)
 	{
 		//通过sleep模拟定时效果
 		std::this_thread::sleep_for(std::chrono::seconds(maxFreeTime_));
 		//扫描整个队列，释放多余的连接
-		std::unique_lock<std::mutex>lock{ queue_mutex_ };
-		while (connection_Count_ > initSize_)
+		std::unique_lock<std::mutex>lock{ queueMutex_ };
+		while (connectionCount_ > initSize_)
 		{
-			Connection* p = connection_queue_.front();
+			Connection* p = connectionQueue_.front();
 			if (p->getAliveTime() >= (maxFreeTime_ * 1000))
 			{
-				connection_queue_.pop();
-				connection_Count_--;
+				connectionQueue_.pop();
+				connectionCount_--;
 				delete p; //调用~Connection释放连接
 			}
 			else
 				break;  //队头的连接都没超过maxFreeTime,其他连接肯定没超过
-        }
+		}
 	}
+
 }

@@ -1,40 +1,42 @@
-﻿#include"public.h"
-#include"Connection.h"
-#include<string>
+﻿#include"Connection.h"
+#include"public.h"
 //初始化数据库连接
 Connection::Connection()
 {
-	_conn = mysql_init(nullptr);
+	conn_ = mysql_init(nullptr);
 }
 //释放数据库连接资源
 Connection::~Connection()
 {
-	if (_conn != nullptr)
-		mysql_close(_conn);
+	if (conn_!=nullptr)
+		mysql_close(conn_);
 }
-//连接数据库
-bool Connection::connect(std::string ip, unsigned short port, std::string user,std::string password, std::string dbname)
+//与数据库建立一条连接
+bool Connection::connection(std::string ip, unsigned short port, std::string username, std::string password, std::string dbname)
 {
-	MYSQL* p = mysql_real_connect(_conn, ip.c_str(), user.c_str(), password.c_str(), dbname.c_str(), port, nullptr, 0);
-	return _conn != nullptr;
+	MYSQL* p = mysql_real_connect(conn_, ip.c_str(), username.c_str(), password.c_str(), dbname.c_str(), port,nullptr,0);
+	return p != nullptr;
 }
-//更新操作 insert，delete，update
+//修改数据库DML
 bool Connection::update(std::string sql)
 {
-	if (mysql_query(_conn, sql.c_str()))
+	if (mysql_query(conn_, sql.c_str()))
 	{
-		LOG("更新失败:" + sql);
+		LOG("更新失败"+sql);
 		return false;
 	}
 	return true;
 }
-//查询操作select
 MYSQL_RES* Connection::query(std::string sql)
 {
-	if (mysql_query(_conn, sql.c_str()))
+	if (mysql_query(conn_, sql.c_str()))
 	{
 		LOG("查询失败" + sql);
 		return nullptr;
 	}
-	return mysql_use_result(_conn);
+	return mysql_use_result(conn_);
 }
+//刷新一下连接的起始的空闲时间点
+void Connection::refreshAliveTime() { aliveTime_ = clock(); }
+//返回存活的时间
+std::clock_t Connection::getAliveTime()const { return clock() - aliveTime_; }
